@@ -17,8 +17,9 @@ func (d *rbdDriver) configure() error {
 	// set default confs:
 	d.conf["cluster"] = "ceph"
 	d.conf["device_map_root"] = "/dev/rbd"
+	d.conf["volume_options"] = "layering exclusive-lock journaling"
 
-	d.loadEnvironmentRbdConfigVars();
+	d.loadEnvironmentRbdConfigVars()
 
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/docker/go-plugins-helpers/volume"
 	"strconv"
 	"fmt"
+	"strings"
 )
 
 // Volume is the Docker concept which we map onto a Ceph RBD Image
@@ -72,6 +73,18 @@ func (d *rbdDriver) Create(r volume.Request) volume.Response {
 				return responseError(fmt.Sprintf("unable to parse size int: %s", err))
 			}
 			v.Size = size
+	    case "features":
+	        var splitted = strings.Split(val, " ")
+	        if(len(splitted) > 1) {
+				val = strings.Replace(val, splitted[0]+" ", "", -1)
+				d.features = val
+			}
+			for i := 0; i < len(d.cephFeatures); i++ {
+				if(strings.Compare(strings.ToUpper(splitted[0]), d.cephFeatures[i]) == 0) {
+					d.firstFeature = uint64(i)
+					break;
+				}
+			}
 		case "order":
 			var order, err = strconv.Atoi(val)
 			if err != nil {

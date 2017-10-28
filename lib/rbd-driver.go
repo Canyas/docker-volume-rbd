@@ -13,16 +13,20 @@ import (
 	"time"
 	"regexp"
 	"os"
+	"strings"
 )
 
 type rbdDriver struct {
-	root  string            // scratch dir for mounts for this plugin
-	conf  map[string]string // ceph config params
+	root  			string            // scratch dir for mounts for this plugin
+	conf  			map[string]string // ceph config params
+	cephFeatures	[8]string	  // ceph features
+	features		string
+	firstFeature 	uint64
 
 	sync.RWMutex            // mutex to guard operations that change volume maps or use conn
 
-	conn  *rados.Conn       // create a connection for each API operation
-	ioctx *rados.IOContext  // context for requested pool
+	conn  		*rados.Conn       // create a connection for each API operation
+	ioctx 		*rados.IOContext  // context for requested pool
 }
 
 var (
@@ -46,6 +50,33 @@ func NewDriver() (error, *rbdDriver) {
 	err := driver.configure()
 	if err != nil {
 		return err, nil
+	}
+
+	//Initialize the ceph features
+	driver.cephFeatures[0] = "LAYERING"
+	driver.cephFeatures[1] = "STRIPING"
+	driver.cephFeatures[2] = "EXCLUSIVE_LOCK"
+	driver.cephFeatures[3] = "OBJECT_MAP"
+	driver.cephFeatures[4] = "FAST_DIFF"
+	driver.cephFeatures[5] = "DEEP_FLATTEN"
+	driver.cephFeatures[6] = "JOURNALING"
+	driver.cephFeatures[7] = "DATA_POOL"
+
+	driver.firstFeature = uint64(8)
+
+	val := driver.conf["volume_options"]
+	if(len(val) > 0) {
+		var splitted = strings.Split(val, " ")
+		if (len(splitted) > 1) {
+			val = strings.Replace(val, splitted[0]+" ", "", -1)
+			driver.features = val
+		}
+		for i := 0; i < len(driver.cephFeatures); i++ {
+			if (strings.Compare(strings.ToUpper(splitted[0]), driver.cephFeatures[i]) == 0) {
+				driver.firstFeature = uint64(i)
+				break;
+			}
+		}
 	}
 
 	return nil, driver
@@ -147,11 +178,21 @@ func (d *rbdDriver) createRbdImage(pool string, imageName string, size uint64, o
 
 	// create the image
 	sizeInBytes := size * 1024 * 1024
-	_, err = rbd.Create(d.ioctx, imageName, sizeInBytes, order)
+	if(d.firstFeature < uint64(len(d.cephFeatures))) {
+		_, err = rbd.Create(d.ioctx, imageName, sizeInBytes, order, d.firstFeature)
+	} else {
+		_, err = rbd.Create(d.ioctx, imageName, sizeInBytes, order)
+	}
 	if err != nil {
 		return err
 	}
 
+	if(len(d.features) > 0) {
+		_, err = d.rbdsh(pool, "feature enable", imageName, d.features)
+		if err != nil {
+			return err
+		}
+	}
 
 	// map to kernel device only to initialize
 	device, err := d.mapImage(pool, imageName)
