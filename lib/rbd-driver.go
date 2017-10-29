@@ -79,6 +79,8 @@ func NewDriver() (error, *rbdDriver) {
 		}
 	}
 
+	logrus.Debugf("volume-rbd FirstFeature:%s; Features: %s", driver.firstFeature, driver.features)
+
 	return nil, driver
 }
 

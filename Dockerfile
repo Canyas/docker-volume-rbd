@@ -23,4 +23,4 @@ RUN apt-get update \
 
 COPY docker-volume-rbd /
 
-CMD ["docker-volume-rbd"]
+CMD ["/docker-volume-rbd"]
